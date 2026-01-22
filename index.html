@@ -41,12 +41,16 @@
 
         <nav class="main-nav">
             <button class="nav-btn active" data-tab="chamada">
-                <span class="material-icons">list_alt</span> Chamada
+                <span class="material-icons">list_alt</span>
+                Chamada
             </button>
             <button class="nav-btn" data-tab="dados">
-                <span class="material-icons">bar_chart</span> Dados
+                <span class="material-icons">bar_chart</span>
+                Dados
             </button>
-            <button class="nav-btn rh-only" data-tab="rh"> <span class="material-icons">people</span> Gestão RH
+            <button class="nav-btn rh-only" data-tab="rh">
+                <span class="material-icons">people</span>
+                Gestão RH
             </button>
         </nav>
 
@@ -83,15 +87,61 @@
                         <strong>0%</strong>
                     </div>
                 </div>
-                <p>Gráficos em breve...</p>
+                <p style="margin-top:20px; color:#666;">Gráficos serão implementados na próxima fase.</p>
             </section>
 
             <section id="tab-rh" class="tab-content hidden">
                 <div class="header-section">
-                    <h3>Cadastro de Colaboradores</h3>
-                    <button class="btn-primary">+ Novo</button>
+                    <h3>Gestão de Colaboradores</h3>
                 </div>
-                <p>Lista de funcionários...</p>
+
+                <div class="card-rh">
+                    <h4>Novo Cadastro</h4>
+                    <form id="form-rh">
+                        <div class="rh-grid">
+                            <div class="input-group">
+                                <label>Nome Completo</label>
+                                <input type="text" id="rh-nome" required placeholder="Ex: João Silva">
+                            </div>
+                            <div class="input-group">
+                                <label>Matrícula</label>
+                                <input type="number" id="rh-matricula" required placeholder="Ex: 1020">
+                            </div>
+                            <div class="input-group">
+                                <label>Função</label>
+                                <input type="text" id="rh-funcao" required placeholder="Ex: Operador I">
+                            </div>
+                            <div class="input-group">
+                                <label>Linha / Setor</label>
+                                <select id="rh-linha" required>
+                                    <option value="">Selecione...</option>
+                                    <option value="linha_1">Linha 1</option>
+                                    <option value="linha_2">Linha 2</option>
+                                    <option value="acabamento">Acabamento</option>
+                                </select>
+                            </div>
+                        </div>
+                        <button type="submit" class="btn-primary" style="width: auto; margin-top: 10px;">Salvar Colaborador</button>
+                    </form>
+                </div>
+
+                <div class="lista-funcionarios-container">
+                    <h4>Equipe Cadastrada</h4>
+                    <div class="tabela-responsive">
+                        <table class="tabela-rh">
+                            <thead>
+                                <tr>
+                                    <th>Matrícula</th>
+                                    <th>Nome</th>
+                                    <th>Linha</th>
+                                    <th style="text-align: right;">Ações</th>
+                                </tr>
+                            </thead>
+                            <tbody id="lista-rh-body">
+                                </tbody>
+                        </table>
+                    </div>
+                </div>
             </section>
 
         </main>
