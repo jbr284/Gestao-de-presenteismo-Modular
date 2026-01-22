@@ -1,13 +1,14 @@
 import { auth, db } from './firebase-config.js';
 import { signInWithEmailAndPassword, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
-import { collection, addDoc, query, orderBy, onSnapshot, deleteDoc, doc, where, setDoc } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
+// Adicionado getDocs para o relatório
+import { collection, addDoc, query, orderBy, onSnapshot, deleteDoc, doc, where, setDoc, getDocs } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
 
 // --- VARIÁVEIS GLOBAIS ---
 let linhaAtual = 'linha_1'; 
 let unsubscribeColaboradores = null; 
 let unsubscribeChamadaDia = null;
 
-// --- ELEMENTOS ---
+// --- ELEMENTOS UI ---
 const loginScreen = document.getElementById('login-screen');
 const appScreen = document.getElementById('app-screen');
 const formLogin = document.getElementById('form-login');
@@ -15,7 +16,7 @@ const msgErro = document.getElementById('mensagem-erro');
 const btnLogout = document.getElementById('btn-logout');
 
 // ==================================================================
-// 🚨 FUNÇÕES PÚBLICAS (WINDOW) - CORRIGIDAS 🚨
+// 🚨 FUNÇÕES PÚBLICAS (WINDOW) 🚨
 // ==================================================================
 
 // 1. Marcar Presença/Falta
@@ -23,33 +24,31 @@ window.marcarPresenca = async function(id, status, nome) {
     const dataIso = document.getElementById('data-chamada').value;
     if (!dataIso) { alert("ERRO: Selecione uma data!"); return; }
 
-    console.log(`Tentando salvar: ${nome} -> ${status} em ${dataIso}`);
+    console.log(`Salvando: ${nome} | ${status} | ${dataIso}`);
 
-    // --- FEEDBACK VISUAL IMEDIATO ---
+    // Feedback Visual Imediato
     const card = document.getElementById(`card-${id}`);
     const btnP = document.getElementById(`btn-p-${id}`);
     const btnF = document.getElementById(`btn-f-${id}`);
     const divObs = document.getElementById(`div-obs-${id}`);
 
-    // Limpa
     card.classList.remove('presente', 'falta');
     btnP.classList.remove('selected-p');
     btnF.classList.remove('selected-f');
     divObs.classList.add('hidden');
 
-    // Aplica novo estado
     if (status === 'presente') {
         card.classList.add('presente');
         btnP.classList.add('selected-p');
     } else {
         card.classList.add('falta');
         btnF.classList.add('selected-f');
-        divObs.classList.remove('hidden'); // Mostra select
+        divObs.classList.remove('hidden');
     }
 
-    // --- SALVAR NO FIREBASE ---
+    // Salvar no Firebase
     const updateData = {};
-    const campo = `${linhaAtual}.${id}`; // Ex: linha_1.ID_DO_DOC
+    const campo = `${linhaAtual}.${id}`;
 
     updateData[campo] = {
         status: status,
@@ -66,14 +65,14 @@ window.marcarPresenca = async function(id, status, nome) {
 
     try {
         await setDoc(doc(db, "chamadas", dataIso), updateData, { merge: true });
-        console.log("Salvo com sucesso no Firebase!");
+        console.log("Salvo com sucesso!");
     } catch (error) {
-        console.error("ERRO CRÍTICO AO SALVAR:", error);
+        console.error("ERRO SALVAR:", error);
         alert(`Erro ao salvar: ${error.message}`);
     }
 };
 
-// 2. Salvar Motivo (Quando muda o Select)
+// 2. Salvar Motivo
 window.salvarMotivo = async function(id, nome) {
     const dataIso = document.getElementById('data-chamada').value;
     const novoMotivo = document.getElementById(`motivo-${id}`).value;
@@ -93,9 +92,102 @@ window.salvarMotivo = async function(id, nome) {
     try {
         await setDoc(doc(db, "chamadas", dataIso), updateData, { merge: true });
     } catch (error) {
-        console.error("Erro ao salvar motivo:", error);
+        console.error("Erro motivo:", error);
     }
 };
+
+// 3. Gerar Relatório (Aba Dados)
+async function gerarRelatorioMensal() {
+    const container = document.getElementById('container-relatorio');
+    const mesSelecionado = document.getElementById('filtro-mes').value; // YYYY-MM
+    const linhaFiltro = document.getElementById('filtro-linha-dados').value;
+
+    if(!mesSelecionado) { alert("Selecione um mês."); return; }
+
+    container.innerHTML = '<p style="text-align:center; padding:20px;">Processando relatório...</p>';
+
+    try {
+        // Busca Colaboradores
+        let qColab = query(collection(db, "colaboradores"), orderBy("nome"));
+        if(linhaFiltro !== 'todas') {
+            qColab = query(collection(db, "colaboradores"), where("linha", "==", linhaFiltro), orderBy("nome"));
+        }
+        
+        const snapColabs = await getDocs(qColab);
+        const colaboradores = [];
+        snapColabs.forEach(d => colaboradores.push({id: d.id, ...d.data()}));
+
+        // Busca Chamadas do Mês
+        const inicioMes = `${mesSelecionado}-01`;
+        const fimMes = `${mesSelecionado}-31`;
+        
+        const qChamadas = query(
+            collection(db, "chamadas"),
+            where("__name__", ">=", inicioMes),
+            where("__name__", "<=", fimMes)
+        );
+        
+        const snapChamadas = await getDocs(qChamadas);
+        const dadosChamadas = {}; 
+        snapChamadas.forEach(d => dadosChamadas[d.id] = d.data());
+
+        // Monta Tabela HTML
+        const [ano, mes] = mesSelecionado.split('-').map(Number);
+        const qtdDias = new Date(ano, mes, 0).getDate();
+
+        let html = `<table class="tabela-mensal"><thead><tr><th class="col-fixa-nome">Colaborador</th>`;
+        for(let d=1; d<=qtdDias; d++) html += `<th>${d}</th>`;
+        html += `<th>Resumo</th></tr></thead><tbody>`;
+
+        colaboradores.forEach(colab => {
+            if(!colab.ativo) return;
+
+            let totalFaltas = 0;
+            let linhaHtml = `<tr><td class="col-fixa-nome">${colab.nome.split(' ')[0]} <small>(${colab.matricula})</small></td>`;
+
+            for(let d=1; d<=qtdDias; d++) {
+                const diaString = `${mesSelecionado}-${String(d).padStart(2,'0')}`;
+                const dadosDia = dadosChamadas[diaString];
+                
+                let cellClass = "";
+                let cellContent = "-";
+                let tooltip = "";
+
+                let infoColab = null;
+                if(dadosDia && dadosDia[colab.linha] && dadosDia[colab.linha][colab.id]) {
+                    infoColab = dadosDia[colab.linha][colab.id];
+                }
+
+                if(infoColab) {
+                    if(infoColab.status === 'presente') {
+                        cellClass = "cell-p"; cellContent = "P"; tooltip = "Presente";
+                    } else if(infoColab.status === 'falta') {
+                        const motivo = infoColab.motivo || "Injust.";
+                        tooltip = motivo;
+                        if(motivo.includes("Atestado") || motivo.includes("Justificada")) {
+                            cellClass = "cell-a"; cellContent = "J"; 
+                        } else if(motivo.includes("Suspensao")) {
+                            cellClass = "cell-s"; cellContent = "S";
+                        } else {
+                            cellClass = "cell-f"; cellContent = "F"; totalFaltas++;
+                        }
+                    }
+                }
+                linhaHtml += `<td class="${cellClass}" title="${tooltip}">${cellContent}</td>`;
+            }
+            linhaHtml += `<td><strong>${totalFaltas}</strong> Faltas</td></tr>`;
+            html += linhaHtml;
+        });
+
+        html += `</tbody></table>`;
+        container.innerHTML = html;
+
+    } catch (error) {
+        console.error(error);
+        container.innerHTML = `<p style="color:red; text-align:center;">Erro: ${error.message}</p>`;
+    }
+}
+
 
 // ==================================================================
 // LÓGICA DO APP
@@ -127,6 +219,16 @@ onAuthStateChanged(auth, (user) => {
         carregarColaboradoresRH();
         carregarListaChamada();
         dateInput.addEventListener('change', () => carregarListaChamada());
+        
+        // Setup Relatório
+        const btnRel = document.getElementById('btn-gerar-relatorio');
+        if(btnRel) btnRel.addEventListener('click', gerarRelatorioMensal);
+        const fMes = document.getElementById('filtro-mes');
+        if(fMes && !fMes.value) {
+            const h = new Date();
+            fMes.value = `${h.getFullYear()}-${String(h.getMonth()+1).padStart(2,'0')}`;
+        }
+
     } else {
         loginScreen.classList.remove('hidden');
         appScreen.classList.add('hidden');
@@ -158,7 +260,7 @@ lineBtns.forEach(btn => {
     });
 });
 
-// --- LISTAGEM DE CHAMADA (CARD ROBUSTO) ---
+// --- LISTAGEM DE CHAMADA ---
 const listaChamadaContainer = document.querySelector('.lista-chamada');
 
 function carregarListaChamada() {
@@ -187,11 +289,8 @@ function carregarListaChamada() {
 
             html += `
                 <div class="chamada-card" id="card-${id}">
-                    
                     <div class="col-mat">#${colab.matricula}</div>
-                    
                     <div class="col-nome">${colab.nome}</div>
-                    
                     <div class="col-func">${colab.funcao}</div>
                     
                     <div class="btn-group">
@@ -215,7 +314,6 @@ function carregarListaChamada() {
                             </select>
                         </div>
                     </div>
-
                 </div>
             `;
         });
@@ -224,7 +322,6 @@ function carregarListaChamada() {
     });
 }
 
-// SINCRONIZAÇÃO (LER DO BANCO)
 function sincronizarStatusChamada() {
     const dataIso = document.getElementById('data-chamada').value;
     if(!dataIso) return;
@@ -245,7 +342,6 @@ function sincronizarStatusChamada() {
                     const divObs = document.getElementById(`div-obs-${id}`);
                     const select = document.getElementById(`motivo-${id}`);
 
-                    // Reset
                     card.classList.remove('presente', 'falta');
                     btnP.classList.remove('selected-p');
                     btnF.classList.remove('selected-f');
@@ -263,20 +359,17 @@ function sincronizarStatusChamada() {
                 }
             });
         } else {
-            // Limpa se o dia estiver vazio
             document.querySelectorAll('.chamada-card').forEach(card => {
                 card.classList.remove('presente', 'falta');
                 card.querySelector('.hidden')?.classList.add('hidden');
-                const btns = card.querySelectorAll('.btn-check');
-                btns.forEach(b => b.classList.remove('selected-p', 'selected-f'));
-                const sel = card.querySelector('select');
-                if(sel) sel.value = "";
+                card.querySelectorAll('.btn-check').forEach(b => b.classList.remove('selected-p', 'selected-f'));
+                if(card.querySelector('select')) card.querySelector('select').value = "";
             });
         }
     });
 }
 
-// ... RH (MANTER IGUAL) ...
+// RH
 const formRH = document.getElementById('form-rh');
 const listaRHBody = document.getElementById('lista-rh-body');
 if (formRH) {
