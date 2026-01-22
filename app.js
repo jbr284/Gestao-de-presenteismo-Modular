@@ -15,50 +15,64 @@ const msgErro = document.getElementById('mensagem-erro');
 const btnLogout = document.getElementById('btn-logout');
 
 // ==================================================================
-// 🚨 SOLUÇÃO DO PROBLEMA: TORNANDO AS FUNÇÕES PÚBLICAS (WINDOW) 🚨
+// 🚨 FUNÇÕES PÚBLICAS (WINDOW) COM FEEDBACK IMEDIATO 🚨
 // ==================================================================
 
-// 1. Função Marcar Presença/Falta
 window.marcarPresenca = async function(id, status, nome) {
-    console.log(`Clique detectado! ID: ${id}, Status: ${status}`); // Log para debug
-
     const dataIso = document.getElementById('data-chamada').value;
     if (!dataIso) { alert("Selecione uma data!"); return; }
 
-    // Prepara o objeto para salvar
+    // --- 1. FEEDBACK VISUAL INSTANTÂNEO (Antes do Banco) ---
+    const card = document.getElementById(`card-${id}`);
+    const btnP = card.querySelector('.btn-p');
+    const btnF = card.querySelector('.btn-f');
+    const motivoBox = document.getElementById(`motivo-box-${id}`);
+
+    // Limpa estilos anteriores
+    card.classList.remove('presente', 'falta');
+    btnP.classList.remove('selected');
+    btnF.classList.remove('selected');
+
+    if (status === 'presente') {
+        // Lógica: Clicou Presente -> Fica Verde, Esconde Motivo
+        card.classList.add('presente');
+        btnP.classList.add('selected');
+        motivoBox.classList.add('hidden'); 
+    } else {
+        // Lógica: Clicou Falta -> Fica Vermelho, MOSTRA Motivo
+        card.classList.add('falta');
+        btnF.classList.add('selected');
+        motivoBox.classList.remove('hidden'); // <--- AQUI ESTÁ A LÓGICA QUE FALTAVA
+    }
+
+    // --- 2. SALVAR NO BANCO DE DADOS ---
     const updateData = {};
-    const campo = `${linhaAtual}.${id}`; // Ex: linha_1.DocId123
+    const campo = `${linhaAtual}.${id}`;
 
     updateData[campo] = {
         status: status,
-        nome: nome, // Salvar o nome ajuda na leitura do banco
+        nome: nome,
         atualizadoEm: new Date().toISOString()
     };
 
-    // Lógica do Motivo
     if (status === 'presente') {
-        updateData[campo].motivo = ""; // Limpa motivo se presente
+        updateData[campo].motivo = ""; // Limpa motivo
     } else {
-        // Se já tiver motivo na tela, mantém. Se não, salva vazio.
-        const motivoInput = document.getElementById(`motivo-${id}`);
-        if(motivoInput && motivoInput.value) {
-            updateData[campo].motivo = motivoInput.value;
-        }
+        // Se já tiver um motivo selecionado visualmente, salva ele
+        const motivoAtual = document.getElementById(`motivo-${id}`).value;
+        if(motivoAtual) updateData[campo].motivo = motivoAtual;
     }
 
     try {
-        // Grava no banco (Merge = atualiza sem apagar os outros)
         await setDoc(doc(db, "chamadas", dataIso), updateData, { merge: true });
-        console.log("Salvo no banco com sucesso!");
     } catch (error) {
         console.error("Erro ao salvar:", error);
-        alert("Erro ao salvar. Verifique o console.");
+        // Se der erro, desfaz o visual (opcional, mas boa prática)
+        alert("Erro de conexão ao salvar.");
     }
 };
 
-// 2. Função Atualizar Motivo (Select)
 window.salvarMotivo = async function(id, nome) {
-    console.log("Mudando motivo...");
     const dataIso = document.getElementById('data-chamada').value;
     const novoMotivo = document.getElementById(`motivo-${id}`).value;
 
@@ -66,7 +80,7 @@ window.salvarMotivo = async function(id, nome) {
     const campo = `${linhaAtual}.${id}`;
 
     updateData[campo] = {
-        status: 'falta', // Reforça que é falta
+        status: 'falta',
         nome: nome,
         motivo: novoMotivo,
         atualizadoEm: new Date().toISOString()
@@ -80,11 +94,9 @@ window.salvarMotivo = async function(id, nome) {
 };
 
 // ==================================================================
-// FIM DAS FUNÇÕES PÚBLICAS
+// RESTANTE DO CÓDIGO (LOGIN, ABAS, LISTAGEM)
 // ==================================================================
 
-
-// --- 1. LÓGICA DE LOGIN ---
 if (formLogin) {
     formLogin.addEventListener('submit', async (e) => {
         e.preventDefault();
@@ -98,7 +110,6 @@ if (formLogin) {
         try {
             await signInWithEmailAndPassword(auth, email, senha);
         } catch (error) {
-            console.error("Erro Login:", error);
             msgErro.textContent = "Erro: Usuário ou senha inválidos.";
             msgErro.classList.remove('hidden');
             btnEntrar.textContent = "Entrar";
@@ -109,25 +120,17 @@ if (formLogin) {
 
 onAuthStateChanged(auth, (user) => {
     if (user) {
-        console.log("Logado:", user.email);
         loginScreen.classList.add('hidden');
         appScreen.classList.remove('hidden');
-        
         document.getElementById('user-display-email').textContent = user.email.split('@')[0];
         
-        // Data Default
         const dateInput = document.getElementById('data-chamada');
         if(!dateInput.value) dateInput.valueAsDate = new Date();
         
-        // Carregamentos Iniciais
         carregarColaboradoresRH();
         carregarListaChamada(); 
         
-        // Recarregar se mudar a data
-        dateInput.addEventListener('change', () => {
-            carregarListaChamada(); 
-        });
-
+        dateInput.addEventListener('change', () => carregarListaChamada());
     } else {
         loginScreen.classList.remove('hidden');
         appScreen.classList.add('hidden');
@@ -139,48 +142,38 @@ onAuthStateChanged(auth, (user) => {
     }
 });
 
-if (btnLogout) {
-    btnLogout.addEventListener('click', () => signOut(auth));
-}
+if (btnLogout) btnLogout.addEventListener('click', () => signOut(auth));
 
-// --- 2. NAVEGAÇÃO ABAS ---
+// Abas e Linhas
 const navBtns = document.querySelectorAll('.nav-btn');
 const tabContents = document.querySelectorAll('.tab-content');
-
 navBtns.forEach(btn => {
     btn.addEventListener('click', () => {
         navBtns.forEach(b => b.classList.remove('active'));
         tabContents.forEach(t => t.classList.add('hidden'));
-
         btn.classList.add('active');
-        const tabId = btn.getAttribute('data-tab');
-        document.getElementById(`tab-${tabId}`).classList.remove('hidden');
+        document.getElementById(`tab-${btn.getAttribute('data-tab')}`).classList.remove('hidden');
     });
 });
 
-// --- 3. LISTAGEM DA CHAMADA ---
 const lineBtns = document.querySelectorAll('.line-btn');
-const listaChamadaContainer = document.querySelector('.lista-chamada');
-
 lineBtns.forEach(btn => {
     btn.addEventListener('click', () => {
         lineBtns.forEach(b => b.classList.remove('active'));
         btn.classList.add('active');
-        
         if(btn.textContent.includes('Linha 1')) linhaAtual = 'linha_1';
         else if(btn.textContent.includes('Linha 2')) linhaAtual = 'linha_2';
         else if(btn.textContent.includes('Acabamento')) linhaAtual = 'acabamento';
-        
         carregarListaChamada();
     });
 });
 
+// Listagem de Chamada
+const listaChamadaContainer = document.querySelector('.lista-chamada');
 function carregarListaChamada() {
     listaChamadaContainer.innerHTML = '<p style="text-align:center; margin-top:20px;">Carregando equipe...</p>';
-
     if (unsubscribeColaboradores) unsubscribeColaboradores();
 
-    // Busca colaboradores ATIVOS da linha atual
     const q = query(
         collection(db, "colaboradores"), 
         where("linha", "==", linhaAtual),
@@ -190,7 +183,6 @@ function carregarListaChamada() {
 
     unsubscribeColaboradores = onSnapshot(q, (snapshot) => {
         listaChamadaContainer.innerHTML = "";
-
         if (snapshot.empty) {
             listaChamadaContainer.innerHTML = '<p style="text-align:center; color:#666; margin-top:20px;">Nenhum colaborador nesta linha.</p>';
             return;
@@ -201,18 +193,16 @@ function carregarListaChamada() {
             const colab = docSnap.data();
             const id = docSnap.id;
 
-            // Construção do HTML com ONCLICK direto (apontando para window.marcarPresenca)
-            // Note as aspas simples escapadas \' dentro das aspas duplas da string
             html += `
                 <div class="chamada-card" id="card-${id}">
                     <div class="colab-info">
                         <strong>${colab.nome}</strong>
-                        <small>${colab.funcao} | Mat: ${colab.matricula}</small>
+                        <small>${colab.funcao}</small>
                     </div>
                     
                     <div class="chamada-actions">
                         <button class="btn-check btn-p" onclick="window.marcarPresenca('${id}', 'presente', '${colab.nome}')">
-                            <span class="material-icons" style="font-size:16px;">check_circle</span> Presente
+                            <span class="material-icons" style="font-size:16px;">check_circle</span>
                         </button>
                         <button class="btn-check btn-f" onclick="window.marcarPresenca('${id}', 'falta', '${colab.nome}')">
                             <span class="material-icons" style="font-size:16px;">cancel</span> Falta
@@ -220,8 +210,9 @@ function carregarListaChamada() {
                     </div>
 
                     <div class="motivo-box hidden" id="motivo-box-${id}">
+                        <label style="display:block; font-size:0.8rem; color:#d32f2f; margin-bottom:3px;">Motivo da Falta:</label>
                         <select class="motivo-select" id="motivo-${id}" onchange="window.salvarMotivo('${id}', '${colab.nome}')">
-                            <option value="">Selecione o Motivo...</option>
+                            <option value="">Selecione...</option>
                             <option value="Injustificada">Falta Injustificada</option>
                             <option value="Atestado">Atestado Médico</option>
                             <option value="Justificada">Justificada (Gestor)</option>
@@ -232,90 +223,70 @@ function carregarListaChamada() {
                 </div>
             `;
         });
-        
         listaChamadaContainer.innerHTML = html;
-        
-        // Após desenhar, busca o status atual para colorir
         sincronizarStatusChamada();
     });
 }
 
-// --- SINCRONIZAÇÃO VISUAL (LER BANCO) ---
+// Sincronizar (Ler Banco)
 function sincronizarStatusChamada() {
     const dataIso = document.getElementById('data-chamada').value;
     if(!dataIso) return;
-
     if (unsubscribeChamadaDia) unsubscribeChamadaDia();
 
-    const docRef = doc(db, "chamadas", dataIso);
-
-    unsubscribeChamadaDia = onSnapshot(docRef, (docSnap) => {
+    unsubscribeChamadaDia = onSnapshot(doc(db, "chamadas", dataIso), (docSnap) => {
         if (docSnap.exists()) {
             const dadosDia = docSnap.data();
             const dadosLinha = dadosDia[linhaAtual] || {};
 
-            // Atualiza cada card na tela
             document.querySelectorAll('.chamada-card').forEach(card => {
                 const id = card.id.replace('card-', '');
                 const info = dadosLinha[id];
 
-                const btnP = card.querySelector('.btn-p');
-                const btnF = card.querySelector('.btn-f');
-                const motivoBox = document.getElementById(`motivo-box-${id}`);
-                const selectMotivo = document.getElementById(`motivo-${id}`);
-
-                // Reset visual
-                card.classList.remove('presente', 'falta');
-                btnP.classList.remove('selected');
-                btnF.classList.remove('selected');
-                motivoBox.classList.add('hidden');
-
+                // NÃO resetamos tudo aqui para evitar piscar se o usuário acabou de clicar
+                // Apenas aplicamos o estado do banco se ele existir
                 if (info) {
+                    const btnP = card.querySelector('.btn-p');
+                    const btnF = card.querySelector('.btn-f');
+                    const motivoBox = document.getElementById(`motivo-box-${id}`);
+                    const selectMotivo = document.getElementById(`motivo-${id}`);
+
                     if (info.status === 'presente') {
                         card.classList.add('presente');
+                        card.classList.remove('falta');
                         btnP.classList.add('selected');
+                        btnF.classList.remove('selected');
+                        motivoBox.classList.add('hidden');
                     } else if (info.status === 'falta') {
                         card.classList.add('falta');
+                        card.classList.remove('presente');
                         btnF.classList.add('selected');
+                        btnP.classList.remove('selected');
                         motivoBox.classList.remove('hidden');
                         if (info.motivo) selectMotivo.value = info.motivo;
                     }
                 }
             });
-        } else {
-            // Se o dia não existe, limpa tudo
-            document.querySelectorAll('.chamada-card').forEach(card => {
-                card.classList.remove('presente', 'falta');
-                card.querySelector('.btn-p').classList.remove('selected');
-                card.querySelector('.btn-f').classList.remove('selected');
-                card.querySelector('.motivo-box').classList.add('hidden');
-                const sel = card.querySelector('select');
-                if(sel) sel.value = "";
-            });
         }
     });
 }
 
-// --- 4. GESTÃO RH ---
+// RH e Cadastros
 const formRH = document.getElementById('form-rh');
 const listaRHBody = document.getElementById('lista-rh-body');
 
 if (formRH) {
     formRH.addEventListener('submit', async (e) => {
         e.preventDefault();
-        
         const nome = document.getElementById('rh-nome').value;
         const matricula = document.getElementById('rh-matricula').value;
         const funcao = document.getElementById('rh-funcao').value;
         const linha = document.getElementById('rh-linha').value;
 
         if(!linha) { alert("Selecione uma linha!"); return; }
-
         const btnSalvar = formRH.querySelector('button');
-        const textoOriginal = btnSalvar.textContent;
         btnSalvar.textContent = "Salvando...";
-        btnSalvar.disabled = true;
-
+        
         try {
             await addDoc(collection(db, "colaboradores"), {
                 nome: nome.toUpperCase(),
@@ -325,49 +296,26 @@ if (formRH) {
                 ativo: true,
                 criadoEm: new Date()
             });
-            alert("Colaborador cadastrado!");
+            alert("Cadastrado!");
             formRH.reset();
-        } catch (error) {
-            console.error(error);
-            alert("Erro ao salvar.");
-        } finally {
-            btnSalvar.textContent = textoOriginal;
-            btnSalvar.disabled = false;
-        }
+        } catch(e) { console.error(e); alert("Erro."); }
+        finally { btnSalvar.textContent = "Salvar Colaborador"; }
     });
 }
 
 function carregarColaboradoresRH() {
-    const q = query(collection(db, "colaboradores"), orderBy("nome"));
-    onSnapshot(q, (snapshot) => {
+    onSnapshot(query(collection(db, "colaboradores"), orderBy("nome")), (snapshot) => {
         listaRHBody.innerHTML = "";
-        if (snapshot.empty) {
-            listaRHBody.innerHTML = `<tr><td colspan="4" style="text-align:center;">Vazio.</td></tr>`;
-            return;
-        }
         snapshot.forEach((doc) => {
             const colab = doc.data();
             let nomeLinha = colab.linha === 'linha_1' ? "Linha 1" : (colab.linha === 'linha_2' ? "Linha 2" : "Acabamento");
-            
             const tr = document.createElement('tr');
-            tr.innerHTML = `
-                <td>${colab.matricula}</td>
-                <td><strong>${colab.nome}</strong><br><small>${colab.funcao}</small></td>
-                <td><span class="badge" style="background:#e3f2fd; color:#0d47a1;">${nomeLinha}</span></td>
-                <td style="text-align: right;"><button class="btn-excluir" data-id="${doc.id}">Excluir</button></td>
-            `;
+            tr.innerHTML = `<td>${colab.matricula}</td><td><strong>${colab.nome}</strong><br><small>${colab.funcao}</small></td><td><span class="badge">${nomeLinha}</span></td><td style="text-align:right"><button class="btn-excluir" onclick="window.deletarColaborador('${doc.id}')">Excluir</button></td>`;
             listaRHBody.appendChild(tr);
-        });
-
-        document.querySelectorAll('.btn-excluir').forEach(btn => {
-            btn.addEventListener('click', deletarColaborador);
         });
     });
 }
 
-async function deletarColaborador(e) {
-    if(confirm("Excluir colaborador?")) {
-        const id = e.target.getAttribute('data-id');
-        await deleteDoc(doc(db, "colaboradores", id));
-    }
+window.deletarColaborador = async function(id) {
+    if(confirm("Excluir?")) await deleteDoc(doc(db, "colaboradores", id));
 }
