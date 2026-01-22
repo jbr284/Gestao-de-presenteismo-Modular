@@ -14,7 +14,77 @@ const formLogin = document.getElementById('form-login');
 const msgErro = document.getElementById('mensagem-erro');
 const btnLogout = document.getElementById('btn-logout');
 
-// --- 1. LOGIN ---
+// ==================================================================
+// 🚨 SOLUÇÃO DO PROBLEMA: TORNANDO AS FUNÇÕES PÚBLICAS (WINDOW) 🚨
+// ==================================================================
+
+// 1. Função Marcar Presença/Falta
+window.marcarPresenca = async function(id, status, nome) {
+    console.log(`Clique detectado! ID: ${id}, Status: ${status}`); // Log para debug
+
+    const dataIso = document.getElementById('data-chamada').value;
+    if (!dataIso) { alert("Selecione uma data!"); return; }
+
+    // Prepara o objeto para salvar
+    const updateData = {};
+    const campo = `${linhaAtual}.${id}`; // Ex: linha_1.DocId123
+
+    updateData[campo] = {
+        status: status,
+        nome: nome, // Salvar o nome ajuda na leitura do banco
+        atualizadoEm: new Date().toISOString()
+    };
+
+    // Lógica do Motivo
+    if (status === 'presente') {
+        updateData[campo].motivo = ""; // Limpa motivo se presente
+    } else {
+        // Se já tiver motivo na tela, mantém. Se não, salva vazio.
+        const motivoInput = document.getElementById(`motivo-${id}`);
+        if(motivoInput && motivoInput.value) {
+            updateData[campo].motivo = motivoInput.value;
+        }
+    }
+
+    try {
+        // Grava no banco (Merge = atualiza sem apagar os outros)
+        await setDoc(doc(db, "chamadas", dataIso), updateData, { merge: true });
+        console.log("Salvo no banco com sucesso!");
+    } catch (error) {
+        console.error("Erro ao salvar:", error);
+        alert("Erro ao salvar. Verifique o console.");
+    }
+};
+
+// 2. Função Atualizar Motivo (Select)
+window.salvarMotivo = async function(id, nome) {
+    console.log("Mudando motivo...");
+    const dataIso = document.getElementById('data-chamada').value;
+    const novoMotivo = document.getElementById(`motivo-${id}`).value;
+
+    const updateData = {};
+    const campo = `${linhaAtual}.${id}`;
+
+    updateData[campo] = {
+        status: 'falta', // Reforça que é falta
+        nome: nome,
+        motivo: novoMotivo,
+        atualizadoEm: new Date().toISOString()
+    };
+
+    try {
+        await setDoc(doc(db, "chamadas", dataIso), updateData, { merge: true });
+    } catch (error) {
+        console.error("Erro ao salvar motivo:", error);
+    }
+};
+
+// ==================================================================
+// FIM DAS FUNÇÕES PÚBLICAS
+// ==================================================================
+
+
+// --- 1. LÓGICA DE LOGIN ---
 if (formLogin) {
     formLogin.addEventListener('submit', async (e) => {
         e.preventDefault();
@@ -44,13 +114,19 @@ onAuthStateChanged(auth, (user) => {
         appScreen.classList.remove('hidden');
         
         document.getElementById('user-display-email').textContent = user.email.split('@')[0];
+        
+        // Data Default
         const dateInput = document.getElementById('data-chamada');
         if(!dateInput.value) dateInput.valueAsDate = new Date();
         
+        // Carregamentos Iniciais
         carregarColaboradoresRH();
         carregarListaChamada(); 
         
-        dateInput.addEventListener('change', () => carregarListaChamada());
+        // Recarregar se mudar a data
+        dateInput.addEventListener('change', () => {
+            carregarListaChamada(); 
+        });
 
     } else {
         loginScreen.classList.remove('hidden');
@@ -67,7 +143,7 @@ if (btnLogout) {
     btnLogout.addEventListener('click', () => signOut(auth));
 }
 
-// --- 2. NAVEGAÇÃO ENTRE ABAS ---
+// --- 2. NAVEGAÇÃO ABAS ---
 const navBtns = document.querySelectorAll('.nav-btn');
 const tabContents = document.querySelectorAll('.tab-content');
 
@@ -82,11 +158,10 @@ navBtns.forEach(btn => {
     });
 });
 
-// --- 3. LÓGICA DA CHAMADA (CORRIGIDA) ---
+// --- 3. LISTAGEM DA CHAMADA ---
 const lineBtns = document.querySelectorAll('.line-btn');
 const listaChamadaContainer = document.querySelector('.lista-chamada');
 
-// Troca de Linha
 lineBtns.forEach(btn => {
     btn.addEventListener('click', () => {
         lineBtns.forEach(b => b.classList.remove('active'));
@@ -105,6 +180,7 @@ function carregarListaChamada() {
 
     if (unsubscribeColaboradores) unsubscribeColaboradores();
 
+    // Busca colaboradores ATIVOS da linha atual
     const q = query(
         collection(db, "colaboradores"), 
         where("linha", "==", linhaAtual),
@@ -120,109 +196,48 @@ function carregarListaChamada() {
             return;
         }
 
+        let html = "";
         snapshot.forEach((docSnap) => {
             const colab = docSnap.data();
             const id = docSnap.id;
 
-            // Criação dos Elementos via DOM (Evita erros de onclick)
-            const card = document.createElement('div');
-            card.className = 'chamada-card';
-            card.id = `card-${id}`;
-            card.dataset.nome = colab.nome;
+            // Construção do HTML com ONCLICK direto (apontando para window.marcarPresenca)
+            // Note as aspas simples escapadas \' dentro das aspas duplas da string
+            html += `
+                <div class="chamada-card" id="card-${id}">
+                    <div class="colab-info">
+                        <strong>${colab.nome}</strong>
+                        <small>${colab.funcao} | Mat: ${colab.matricula}</small>
+                    </div>
+                    
+                    <div class="chamada-actions">
+                        <button class="btn-check btn-p" onclick="window.marcarPresenca('${id}', 'presente', '${colab.nome}')">
+                            <span class="material-icons" style="font-size:16px;">check_circle</span> Presente
+                        </button>
+                        <button class="btn-check btn-f" onclick="window.marcarPresenca('${id}', 'falta', '${colab.nome}')">
+                            <span class="material-icons" style="font-size:16px;">cancel</span> Falta
+                        </button>
+                    </div>
 
-            // Conteúdo HTML Interno
-            card.innerHTML = `
-                <div class="colab-info">
-                    <strong>${colab.nome}</strong>
-                    <small>${colab.funcao} | Mat: ${colab.matricula}</small>
-                </div>
-                <div class="chamada-actions">
-                    <button class="btn-check btn-p" id="btn-p-${id}">
-                        <span class="material-icons" style="font-size:16px;">check_circle</span> Presente
-                    </button>
-                    <button class="btn-check btn-f" id="btn-f-${id}">
-                        <span class="material-icons" style="font-size:16px;">cancel</span> Falta
-                    </button>
-                </div>
-                <div class="motivo-box hidden" id="motivo-box-${id}">
-                    <select class="motivo-select" id="motivo-${id}">
-                        <option value="">Selecione o Motivo...</option>
-                        <option value="Injustificada">Falta Injustificada</option>
-                        <option value="Atestado">Atestado Médico</option>
-                        <option value="Justificada">Justificada (Gestor)</option>
-                        <option value="Suspensao">Suspensão</option>
-                        <option value="Folga">Folga / Compensação</option>
-                    </select>
+                    <div class="motivo-box hidden" id="motivo-box-${id}">
+                        <select class="motivo-select" id="motivo-${id}" onchange="window.salvarMotivo('${id}', '${colab.nome}')">
+                            <option value="">Selecione o Motivo...</option>
+                            <option value="Injustificada">Falta Injustificada</option>
+                            <option value="Atestado">Atestado Médico</option>
+                            <option value="Justificada">Justificada (Gestor)</option>
+                            <option value="Suspensao">Suspensão</option>
+                            <option value="Folga">Folga / Compensação</option>
+                        </select>
+                    </div>
                 </div>
             `;
-
-            // ADICIONA OS LISTENERS DE CLIQUE AQUI (SEGURO)
-            const btnP = card.querySelector(`#btn-p-${id}`);
-            const btnF = card.querySelector(`#btn-f-${id}`);
-            const selectMotivo = card.querySelector(`#motivo-${id}`);
-
-            btnP.addEventListener('click', () => salvarPresenca(id, 'presente', colab.nome));
-            btnF.addEventListener('click', () => salvarPresenca(id, 'falta', colab.nome));
-            
-            // Listener do Select de Motivo
-            selectMotivo.addEventListener('change', () => {
-                salvarMotivo(id, colab.nome, selectMotivo.value);
-            });
-
-            listaChamadaContainer.appendChild(card);
         });
-
+        
+        listaChamadaContainer.innerHTML = html;
+        
+        // Após desenhar, busca o status atual para colorir
         sincronizarStatusChamada();
     });
-}
-
-// --- FUNÇÃO DE SALVAR (AGORA INTERNA) ---
-async function salvarPresenca(id, status, nome) {
-    const dataIso = document.getElementById('data-chamada').value;
-    if (!dataIso) { alert("Selecione uma data!"); return; }
-
-    const updateData = {};
-    const campo = `${linhaAtual}.${id}`;
-
-    updateData[campo] = {
-        status: status,
-        nome: nome,
-        atualizadoEm: new Date().toISOString()
-    };
-
-    // Se for presente, limpa o motivo
-    if (status === 'presente') {
-        updateData[campo].motivo = "";
-    } else {
-        // Se for falta, tenta manter o motivo que já estava na tela, se houver
-        const motivoAtual = document.getElementById(`motivo-${id}`).value;
-        if(motivoAtual) updateData[campo].motivo = motivoAtual;
-    }
-
-    try {
-        await setDoc(doc(db, "chamadas", dataIso), updateData, { merge: true });
-    } catch (error) {
-        console.error("Erro ao salvar:", error);
-    }
-}
-
-async function salvarMotivo(id, nome, novoMotivo) {
-    const dataIso = document.getElementById('data-chamada').value;
-    const updateData = {};
-    const campo = `${linhaAtual}.${id}`;
-
-    updateData[campo] = {
-        status: 'falta', // Confirma que é falta
-        nome: nome,
-        motivo: novoMotivo,
-        atualizadoEm: new Date().toISOString()
-    };
-
-    try {
-        await setDoc(doc(db, "chamadas", dataIso), updateData, { merge: true });
-    } catch (error) {
-        console.error("Erro ao salvar motivo:", error);
-    }
 }
 
 // --- SINCRONIZAÇÃO VISUAL (LER BANCO) ---
@@ -239,6 +254,7 @@ function sincronizarStatusChamada() {
             const dadosDia = docSnap.data();
             const dadosLinha = dadosDia[linhaAtual] || {};
 
+            // Atualiza cada card na tela
             document.querySelectorAll('.chamada-card').forEach(card => {
                 const id = card.id.replace('card-', '');
                 const info = dadosLinha[id];
@@ -248,7 +264,7 @@ function sincronizarStatusChamada() {
                 const motivoBox = document.getElementById(`motivo-box-${id}`);
                 const selectMotivo = document.getElementById(`motivo-${id}`);
 
-                // Reset
+                // Reset visual
                 card.classList.remove('presente', 'falta');
                 btnP.classList.remove('selected');
                 btnF.classList.remove('selected');
@@ -267,18 +283,18 @@ function sincronizarStatusChamada() {
                 }
             });
         } else {
-            // Dia limpo
+            // Se o dia não existe, limpa tudo
             document.querySelectorAll('.chamada-card').forEach(card => {
                 card.classList.remove('presente', 'falta');
                 card.querySelector('.btn-p').classList.remove('selected');
                 card.querySelector('.btn-f').classList.remove('selected');
                 card.querySelector('.motivo-box').classList.add('hidden');
-                card.querySelector('select').value = "";
+                const sel = card.querySelector('select');
+                if(sel) sel.value = "";
             });
         }
     });
 }
-
 
 // --- 4. GESTÃO RH ---
 const formRH = document.getElementById('form-rh');
