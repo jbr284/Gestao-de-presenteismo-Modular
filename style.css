@@ -1,6 +1,6 @@
 /* Reset Básico */
 body {
-    font-family: 'Segoe UI', sans-serif;
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
     background-color: #f0f2f5;
     margin: 0;
     height: 100vh;
@@ -11,7 +11,7 @@ body {
 /* Utilitários */
 .hidden { display: none !important; }
 
-/* TELA LOGIN (Centralizada) */
+/* TELA LOGIN */
 .login-container {
     display: flex;
     justify-content: center;
@@ -29,7 +29,8 @@ body {
     text-align: center;
 }
 .input-group { margin-bottom: 1rem; text-align: left; }
-.input-group input { width: 100%; padding: 10px; border: 1px solid #ccc; border-radius: 4px; box-sizing: border-box; }
+.input-group label { display: block; font-size: 0.9em; margin-bottom: 5px; color: #333; }
+.input-group input, .input-group select { width: 100%; padding: 10px; border: 1px solid #ccc; border-radius: 4px; box-sizing: border-box; }
 #btn-entrar { width: 100%; padding: 10px; background: #0d47a1; color: white; border: none; border-radius: 4px; cursor: pointer; }
 #btn-entrar:hover { background: #002171; }
 .erro { color: red; font-size: 0.9em; margin-top: 10px; }
@@ -99,3 +100,63 @@ body {
 .kpi-container { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
 .kpi-card { background: white; padding: 15px; border-radius: 8px; text-align: center; box-shadow: 0 2px 4px rgba(0,0,0,0.05); }
 .kpi-card strong { display: block; font-size: 1.5rem; color: #0d47a1; margin-top: 5px; }
+
+/* --- ESTILOS RH (NOVO) --- */
+.card-rh {
+    background: white;
+    padding: 20px;
+    border-radius: 8px;
+    margin-bottom: 20px;
+    box-shadow: 0 2px 5px rgba(0,0,0,0.05);
+}
+.rh-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 15px;
+}
+.btn-primary {
+    background-color: #0d47a1;
+    color: white;
+    border: none;
+    padding: 10px 20px;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 1rem;
+}
+.btn-primary:hover { background-color: #002171; }
+
+.tabela-responsive { overflow-x: auto; }
+.tabela-rh {
+    width: 100%;
+    border-collapse: collapse;
+    background: white;
+    border-radius: 8px;
+    overflow: hidden;
+    margin-top: 10px;
+    box-shadow: 0 2px 5px rgba(0,0,0,0.05);
+}
+.tabela-rh th, .tabela-rh td {
+    padding: 12px;
+    text-align: left;
+    border-bottom: 1px solid #eee;
+}
+.tabela-rh th {
+    background-color: #f5f5f5;
+    color: #333;
+    font-weight: 600;
+}
+.btn-excluir {
+    background: #ffebee;
+    color: #c62828;
+    border: none;
+    padding: 6px 12px;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 0.8rem;
+    transition: background 0.2s;
+}
+.btn-excluir:hover { background: #ffcdd2; }
+
+@media (max-width: 600px) {
+    .rh-grid { grid-template-columns: 1fr; }
+}
