@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Controle de Presença | Modular</title>
+    <link rel="stylesheet" href="style.css">
+    <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
+</head>
+<body>
+
+    <div id="login-screen" class="login-container">
+        <div class="card login-card">
+            <h2>Acesso ao Sistema</h2>
+            <p>Controle de Presenteísmo</p>
+            <form id="form-login">
+                <div class="input-group">
+                    <label>E-mail Corporativo</label>
+                    <input type="email" id="email" required placeholder="ex: nome@empresa.com">
+                </div>
+                <div class="input-group">
+                    <label>Senha</label>
+                    <input type="password" id="senha" required>
+                </div>
+                <button type="submit" id="btn-entrar">Entrar</button>
+                <p id="mensagem-erro" class="erro hidden"></p>
+            </form>
+        </div>
+    </div>
+
+    <div id="app-screen" class="app-container hidden">
+        
+        <header class="top-bar">
+            <div class="user-info">
+                <span class="material-icons">account_circle</span>
+                <span id="user-display-email">Carregando...</span>
+                <span class="badge" id="user-role">Coordenador</span>
+            </div>
+            <button id="btn-logout" class="btn-small">Sair</button>
+        </header>
+
+        <nav class="main-nav">
+            <button class="nav-btn active" data-tab="chamada">
+                <span class="material-icons">list_alt</span> Chamada
+            </button>
+            <button class="nav-btn" data-tab="dados">
+                <span class="material-icons">bar_chart</span> Dados
+            </button>
+            <button class="nav-btn rh-only" data-tab="rh"> <span class="material-icons">people</span> Gestão RH
+            </button>
+        </nav>
+
+        <main class="content-area">
+            
+            <section id="tab-chamada" class="tab-content active">
+                <div class="header-section">
+                    <h3>Registro Diário</h3>
+                    <input type="date" id="data-chamada" class="date-picker">
+                </div>
+                
+                <div class="line-selector">
+                    <button class="line-btn active">Linha 1</button>
+                    <button class="line-btn">Linha 2</button>
+                    <button class="line-btn">Acabamento</button>
+                </div>
+
+                <div class="lista-chamada">
+                    <p style="text-align:center; color:#666; margin-top:20px;">
+                        Selecione uma linha para carregar os colaboradores...
+                    </p>
+                </div>
+            </section>
+
+            <section id="tab-dados" class="tab-content hidden">
+                <h3>Indicadores de Absenteísmo</h3>
+                <div class="kpi-container">
+                    <div class="kpi-card">
+                        <span>Hoje</span>
+                        <strong>0%</strong>
+                    </div>
+                    <div class="kpi-card">
+                        <span>Mensal</span>
+                        <strong>0%</strong>
+                    </div>
+                </div>
+                <p>Gráficos em breve...</p>
+            </section>
+
+            <section id="tab-rh" class="tab-content hidden">
+                <div class="header-section">
+                    <h3>Cadastro de Colaboradores</h3>
+                    <button class="btn-primary">+ Novo</button>
+                </div>
+                <p>Lista de funcionários...</p>
+            </section>
+
+        </main>
+    </div>
+
+    <script type="module" src="app.js"></script>
+</body>
+</html>
