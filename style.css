@@ -93,15 +93,56 @@ body {
     border-radius: 20px;
     cursor: pointer;
     white-space: nowrap;
+    transition: all 0.2s;
 }
 .line-btn.active { background: #e3f2fd; border-color: #2196f3; color: #0d47a1; font-weight: bold; }
 
-/* Cards KPI */
-.kpi-container { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
-.kpi-card { background: white; padding: 15px; border-radius: 8px; text-align: center; box-shadow: 0 2px 4px rgba(0,0,0,0.05); }
-.kpi-card strong { display: block; font-size: 1.5rem; color: #0d47a1; margin-top: 5px; }
+/* --- ESTILOS DA CHAMADA (NOVO) --- */
+.lista-chamada {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+.chamada-card {
+    background: white;
+    border-radius: 8px;
+    padding: 15px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+    flex-wrap: wrap; /* Para celular */
+    border-left: 4px solid #ddd; /* Status padrão */
+}
+.chamada-card.presente { border-left-color: #4caf50; }
+.chamada-card.falta { border-left-color: #f44336; }
 
-/* --- ESTILOS RH (NOVO) --- */
+.colab-info { flex: 1; min-width: 150px; }
+.colab-info strong { display: block; font-size: 1rem; color: #333; }
+.colab-info small { color: #666; }
+
+.chamada-actions { display: flex; gap: 10px; align-items: center; }
+
+/* Botões de Presença/Falta */
+.btn-check {
+    padding: 8px 16px;
+    border: 1px solid #ddd;
+    background: #f5f5f5;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 0.9rem;
+    display: flex;
+    align-items: center;
+    gap: 5px;
+}
+.btn-check.btn-p:hover, .btn-check.btn-p.selected { background: #e8f5e9; color: #2e7d32; border-color: #a5d6a7; }
+.btn-check.btn-f:hover, .btn-check.btn-f.selected { background: #ffebee; color: #c62828; border-color: #ef9a9a; }
+
+.motivo-box { margin-left: 10px; }
+.motivo-select { padding: 8px; border: 1px solid #ccc; border-radius: 4px; background: white; }
+
+
+/* --- ESTILOS RH --- */
 .card-rh {
     background: white;
     padding: 20px;
@@ -159,4 +200,8 @@ body {
 
 @media (max-width: 600px) {
     .rh-grid { grid-template-columns: 1fr; }
+    .chamada-card { flex-direction: column; align-items: flex-start; gap: 10px; }
+    .chamada-actions { width: 100%; justify-content: space-between; }
+    .motivo-box { width: 100%; margin: 5px 0 0 0; }
+    .motivo-select { width: 100%; }
 }
