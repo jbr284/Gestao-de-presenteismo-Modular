@@ -76,18 +76,41 @@
             </section>
 
             <section id="tab-dados" class="tab-content hidden">
-                <h3>Indicadores de Absenteísmo</h3>
-                <div class="kpi-container">
-                    <div class="kpi-card">
-                        <span>Hoje</span>
-                        <strong>0%</strong>
-                    </div>
-                    <div class="kpi-card">
-                        <span>Mensal</span>
-                        <strong>0%</strong>
-                    </div>
+                <div class="header-section">
+                    <h3>Espelho de Ponto Mensal</h3>
                 </div>
-                <p style="margin-top:20px; color:#666;">Gráficos serão implementados na próxima fase.</p>
+
+                <div class="filtros-dados">
+                    <div class="input-group">
+                        <label>Mês de Referência</label>
+                        <input type="month" id="filtro-mes" class="date-picker">
+                    </div>
+                    <div class="input-group">
+                        <label>Filtrar Linha</label>
+                        <select id="filtro-linha-dados">
+                            <option value="todas">Todas as Linhas</option>
+                            <option value="linha_1">Linha 1</option>
+                            <option value="linha_2">Linha 2</option>
+                            <option value="acabamento">Acabamento</option>
+                        </select>
+                    </div>
+                    <button id="btn-gerar-relatorio" class="btn-primary" style="height: 42px; margin-top: 23px;">
+                        <span class="material-icons">search</span> Gerar
+                    </button>
+                </div>
+
+                <div class="legenda-container">
+                    <span class="legenda-item"><span class="dot p"></span> Presente</span>
+                    <span class="legenda-item"><span class="dot f"></span> Falta Injust.</span>
+                    <span class="legenda-item"><span class="dot a"></span> Justif/Atestado</span>
+                    <span class="legenda-item"><span class="dot s"></span> Suspensão</span>
+                </div>
+
+                <div id="container-relatorio" class="relatorio-scroll">
+                    <p style="text-align:center; color:#666; margin-top:30px;">
+                        Selecione o mês e clique em Gerar para ver a evolução.
+                    </p>
+                </div>
             </section>
 
             <section id="tab-rh" class="tab-content hidden">
@@ -121,7 +144,7 @@
                                 </select>
                             </div>
                         </div>
-                        <button type="submit" class="btn-primary" style="width: auto; margin-top: 10px;">Salvar Colaborador</button>
+                        <button type="submit" id="btn-salvar-rh" class="btn-primary" style="width: auto; margin-top: 10px;">Salvar Colaborador</button>
                     </form>
                 </div>
 
@@ -137,8 +160,7 @@
                                     <th style="text-align: right;">Ações</th>
                                 </tr>
                             </thead>
-                            <tbody id="lista-rh-body">
-                                </tbody>
+                            <tbody id="lista-rh-body"></tbody>
                         </table>
                     </div>
                 </div>
