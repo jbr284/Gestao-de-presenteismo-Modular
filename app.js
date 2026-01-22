@@ -1,6 +1,6 @@
 import { auth, db } from './firebase-config.js';
 import { signInWithEmailAndPassword, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
-import { collection, addDoc, query, orderBy, onSnapshot, deleteDoc, doc, where, setDoc, getDoc } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
+import { collection, addDoc, query, orderBy, onSnapshot, deleteDoc, doc, where, setDoc } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
 
 // --- VARIÁVEIS GLOBAIS ---
 let linhaAtual = 'linha_1'; 
@@ -15,37 +15,35 @@ const msgErro = document.getElementById('mensagem-erro');
 const btnLogout = document.getElementById('btn-logout');
 
 // ==================================================================
-// 🚨 FUNÇÕES PÚBLICAS (WINDOW) COM FEEDBACK IMEDIATO 🚨
+// 🚨 FUNÇÕES PÚBLICAS (WINDOW) 🚨
 // ==================================================================
 
 window.marcarPresenca = async function(id, status, nome) {
     const dataIso = document.getElementById('data-chamada').value;
     if (!dataIso) { alert("Selecione uma data!"); return; }
 
-    // --- 1. FEEDBACK VISUAL INSTANTÂNEO (Antes do Banco) ---
-    const card = document.getElementById(`card-${id}`);
-    const btnP = card.querySelector('.btn-p');
-    const btnF = card.querySelector('.btn-f');
-    const motivoBox = document.getElementById(`motivo-box-${id}`);
+    // --- 1. FEEDBACK VISUAL INSTANTÂNEO (TABELA) ---
+    const tr = document.getElementById(`row-${id}`);
+    const btnP = document.getElementById(`btn-p-${id}`);
+    const btnF = document.getElementById(`btn-f-${id}`);
+    const divObs = document.getElementById(`div-obs-${id}`);
 
-    // Limpa estilos anteriores
-    card.classList.remove('presente', 'falta');
-    btnP.classList.remove('selected');
-    btnF.classList.remove('selected');
+    // Limpa estados
+    tr.classList.remove('row-presente', 'row-falta');
+    btnP.classList.remove('selected-p');
+    btnF.classList.remove('selected-f');
+    divObs.classList.add('hidden'); // Esconde a coluna Obs por padrão
 
     if (status === 'presente') {
-        // Lógica: Clicou Presente -> Fica Verde, Esconde Motivo
-        card.classList.add('presente');
-        btnP.classList.add('selected');
-        motivoBox.classList.add('hidden'); 
+        tr.classList.add('row-presente');
+        btnP.classList.add('selected-p');
     } else {
-        // Lógica: Clicou Falta -> Fica Vermelho, MOSTRA Motivo
-        card.classList.add('falta');
-        btnF.classList.add('selected');
-        motivoBox.classList.remove('hidden'); // <--- AQUI ESTÁ A LÓGICA QUE FALTAVA
+        tr.classList.add('row-falta');
+        btnF.classList.add('selected-f');
+        divObs.classList.remove('hidden'); // <--- MOSTRA O SELECT NA COLUNA 5
     }
 
-    // --- 2. SALVAR NO BANCO DE DADOS ---
+    // --- 2. SALVAR NO BANCO ---
     const updateData = {};
     const campo = `${linhaAtual}.${id}`;
 
@@ -56,26 +54,22 @@ window.marcarPresenca = async function(id, status, nome) {
     };
 
     if (status === 'presente') {
-        updateData[campo].motivo = ""; // Limpa motivo
+        updateData[campo].motivo = ""; 
     } else {
-        // Se já tiver um motivo selecionado visualmente, salva ele
-        const motivoAtual = document.getElementById(`motivo-${id}`).value;
-        if(motivoAtual) updateData[campo].motivo = motivoAtual;
+        const select = document.getElementById(`motivo-${id}`);
+        if(select && select.value) updateData[campo].motivo = select.value;
     }
 
     try {
         await setDoc(doc(db, "chamadas", dataIso), updateData, { merge: true });
     } catch (error) {
-        console.error("Erro ao salvar:", error);
-        // Se der erro, desfaz o visual (opcional, mas boa prática)
-        alert("Erro de conexão ao salvar.");
+        console.error("Erro:", error);
     }
 };
 
 window.salvarMotivo = async function(id, nome) {
     const dataIso = document.getElementById('data-chamada').value;
     const novoMotivo = document.getElementById(`motivo-${id}`).value;
-
     const updateData = {};
     const campo = `${linhaAtual}.${id}`;
 
@@ -86,34 +80,23 @@ window.salvarMotivo = async function(id, nome) {
         atualizadoEm: new Date().toISOString()
     };
 
-    try {
-        await setDoc(doc(db, "chamadas", dataIso), updateData, { merge: true });
-    } catch (error) {
-        console.error("Erro ao salvar motivo:", error);
-    }
+    await setDoc(doc(db, "chamadas", dataIso), updateData, { merge: true });
 };
 
 // ==================================================================
-// RESTANTE DO CÓDIGO (LOGIN, ABAS, LISTAGEM)
+// LÓGICA DO APP
 // ==================================================================
 
 if (formLogin) {
     formLogin.addEventListener('submit', async (e) => {
         e.preventDefault();
-        const email = document.getElementById('email').value;
-        const senha = document.getElementById('senha').value;
-        const btnEntrar = document.getElementById('btn-entrar');
-        
-        btnEntrar.textContent = "Entrando...";
-        btnEntrar.disabled = true;
-
         try {
-            await signInWithEmailAndPassword(auth, email, senha);
+            await signInWithEmailAndPassword(auth, 
+                document.getElementById('email').value, 
+                document.getElementById('senha').value
+            );
         } catch (error) {
-            msgErro.textContent = "Erro: Usuário ou senha inválidos.";
             msgErro.classList.remove('hidden');
-            btnEntrar.textContent = "Entrar";
-            btnEntrar.disabled = false;
         }
     });
 }
@@ -128,34 +111,27 @@ onAuthStateChanged(auth, (user) => {
         if(!dateInput.value) dateInput.valueAsDate = new Date();
         
         carregarColaboradoresRH();
-        carregarListaChamada(); 
-        
+        carregarListaChamada();
         dateInput.addEventListener('change', () => carregarListaChamada());
     } else {
         loginScreen.classList.remove('hidden');
         appScreen.classList.add('hidden');
-        const btnEntrar = document.getElementById('btn-entrar');
-        if(btnEntrar) {
-            btnEntrar.textContent = "Entrar";
-            btnEntrar.disabled = false;
-        }
     }
 });
 
-if (btnLogout) btnLogout.addEventListener('click', () => signOut(auth));
+if(btnLogout) btnLogout.addEventListener('click', () => signOut(auth));
 
-// Abas e Linhas
-const navBtns = document.querySelectorAll('.nav-btn');
-const tabContents = document.querySelectorAll('.tab-content');
-navBtns.forEach(btn => {
+// Abas
+document.querySelectorAll('.nav-btn').forEach(btn => {
     btn.addEventListener('click', () => {
-        navBtns.forEach(b => b.classList.remove('active'));
-        tabContents.forEach(t => t.classList.add('hidden'));
+        document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
+        document.querySelectorAll('.tab-content').forEach(t => t.classList.add('hidden'));
         btn.classList.add('active');
         document.getElementById(`tab-${btn.getAttribute('data-tab')}`).classList.remove('hidden');
     });
 });
 
+// Linhas
 const lineBtns = document.querySelectorAll('.line-btn');
 lineBtns.forEach(btn => {
     btn.addEventListener('click', () => {
@@ -168,10 +144,11 @@ lineBtns.forEach(btn => {
     });
 });
 
-// Listagem de Chamada
+// --- LISTAGEM DE CHAMADA (AGORA EM TABELA) ---
 const listaChamadaContainer = document.querySelector('.lista-chamada');
+
 function carregarListaChamada() {
-    listaChamadaContainer.innerHTML = '<p style="text-align:center; margin-top:20px;">Carregando equipe...</p>';
+    listaChamadaContainer.innerHTML = '<p style="text-align:center; padding:20px;">Carregando tabela...</p>';
     if (unsubscribeColaboradores) unsubscribeColaboradores();
 
     const q = query(
@@ -182,53 +159,72 @@ function carregarListaChamada() {
     );
 
     unsubscribeColaboradores = onSnapshot(q, (snapshot) => {
-        listaChamadaContainer.innerHTML = "";
         if (snapshot.empty) {
-            listaChamadaContainer.innerHTML = '<p style="text-align:center; color:#666; margin-top:20px;">Nenhum colaborador nesta linha.</p>';
+            listaChamadaContainer.innerHTML = '<p style="text-align:center; padding:20px; color:#666;">Nenhum colaborador nesta linha.</p>';
             return;
         }
 
-        let html = "";
+        // MONTA O CABEÇALHO DA TABELA
+        let html = `
+            <table class="tabela-chamada">
+                <thead>
+                    <tr>
+                        <th class="col-matricula">Mat.</th>
+                        <th class="col-nome">Nome</th>
+                        <th class="col-funcao">Função</th>
+                        <th class="col-acao">Lógica (Ação)</th>
+                        <th class="col-obs">Observação</th>
+                    </tr>
+                </thead>
+                <tbody>
+        `;
+
+        // MONTA AS LINHAS (TR)
         snapshot.forEach((docSnap) => {
             const colab = docSnap.data();
             const id = docSnap.id;
 
             html += `
-                <div class="chamada-card" id="card-${id}">
-                    <div class="colab-info">
-                        <strong>${colab.nome}</strong>
-                        <small>${colab.funcao}</small>
-                    </div>
+                <tr id="row-${id}">
+                    <td class="col-matricula">${colab.matricula}</td>
+                    <td class="col-nome"><strong>${colab.nome}</strong></td>
+                    <td class="col-funcao">${colab.funcao}</td>
                     
-                    <div class="chamada-actions">
-                        <button class="btn-check btn-p" onclick="window.marcarPresenca('${id}', 'presente', '${colab.nome}')">
-                            <span class="material-icons" style="font-size:16px;">check_circle</span>
-                        </button>
-                        <button class="btn-check btn-f" onclick="window.marcarPresenca('${id}', 'falta', '${colab.nome}')">
-                            <span class="material-icons" style="font-size:16px;">cancel</span> Falta
-                        </button>
-                    </div>
+                    <td class="col-acao">
+                        <div class="btn-group">
+                            <button id="btn-p-${id}" class="btn-check" onclick="window.marcarPresenca('${id}', 'presente', '${colab.nome}')">
+                                <span class="material-icons" style="font-size:16px;">check_circle</span> Presente
+                            </button>
+                            <button id="btn-f-${id}" class="btn-check" onclick="window.marcarPresenca('${id}', 'falta', '${colab.nome}')">
+                                <span class="material-icons" style="font-size:16px;">cancel</span> Faltou
+                            </button>
+                        </div>
+                    </td>
 
-                    <div class="motivo-box hidden" id="motivo-box-${id}">
-                        <label style="display:block; font-size:0.8rem; color:#d32f2f; margin-bottom:3px;">Motivo da Falta:</label>
-                        <select class="motivo-select" id="motivo-${id}" onchange="window.salvarMotivo('${id}', '${colab.nome}')">
-                            <option value="">Selecione...</option>
-                            <option value="Injustificada">Falta Injustificada</option>
-                            <option value="Atestado">Atestado Médico</option>
-                            <option value="Justificada">Justificada (Gestor)</option>
-                            <option value="Suspensao">Suspensão</option>
-                            <option value="Folga">Folga / Compensação</option>
-                        </select>
-                    </div>
-                </div>
+                    <td class="col-obs">
+                        <div id="div-obs-${id}" class="hidden">
+                            <select id="motivo-${id}" class="select-motivo" onchange="window.salvarMotivo('${id}', '${colab.nome}')">
+                                <option value="">Selecione o motivo...</option>
+                                <option value="Injustificada">Falta Injustificada</option>
+                                <option value="Atestado">Atestado Médico</option>
+                                <option value="Justificada">Justificada (Gestor)</option>
+                                <option value="Suspensao">Suspensão</option>
+                                <option value="Folga">Folga / Banco</option>
+                            </select>
+                        </div>
+                    </td>
+                </tr>
             `;
         });
+
+        html += `</tbody></table>`;
         listaChamadaContainer.innerHTML = html;
+        
         sincronizarStatusChamada();
     });
 }
 
-// Sincronizar (Ler Banco)
+// SINCRONIZAÇÃO (PINTAR A TABELA)
 function sincronizarStatusChamada() {
     const dataIso = document.getElementById('data-chamada').value;
     if(!dataIso) return;
@@ -239,83 +235,74 @@ function sincronizarStatusChamada() {
             const dadosDia = docSnap.data();
             const dadosLinha = dadosDia[linhaAtual] || {};
 
-            document.querySelectorAll('.chamada-card').forEach(card => {
-                const id = card.id.replace('card-', '');
+            // Percorre as chaves salvas e atualiza a tabela
+            Object.keys(dadosLinha).forEach(id => {
                 const info = dadosLinha[id];
+                const tr = document.getElementById(`row-${id}`);
+                
+                // Se o funcionário ainda existir na tabela
+                if (tr) {
+                    const btnP = document.getElementById(`btn-p-${id}`);
+                    const btnF = document.getElementById(`btn-f-${id}`);
+                    const divObs = document.getElementById(`div-obs-${id}`);
+                    const select = document.getElementById(`motivo-${id}`);
 
-                // NÃO resetamos tudo aqui para evitar piscar se o usuário acabou de clicar
-                // Apenas aplicamos o estado do banco se ele existir
-                if (info) {
-                    const btnP = card.querySelector('.btn-p');
-                    const btnF = card.querySelector('.btn-f');
-                    const motivoBox = document.getElementById(`motivo-box-${id}`);
-                    const selectMotivo = document.getElementById(`motivo-${id}`);
+                    // Reset
+                    tr.classList.remove('row-presente', 'row-falta');
+                    btnP.classList.remove('selected-p');
+                    btnF.classList.remove('selected-f');
+                    divObs.classList.add('hidden');
 
                     if (info.status === 'presente') {
-                        card.classList.add('presente');
-                        card.classList.remove('falta');
-                        btnP.classList.add('selected');
-                        btnF.classList.remove('selected');
-                        motivoBox.classList.add('hidden');
+                        tr.classList.add('row-presente');
+                        btnP.classList.add('selected-p');
                     } else if (info.status === 'falta') {
-                        card.classList.add('falta');
-                        card.classList.remove('presente');
-                        btnF.classList.add('selected');
-                        btnP.classList.remove('selected');
-                        motivoBox.classList.remove('hidden');
-                        if (info.motivo) selectMotivo.value = info.motivo;
+                        tr.classList.add('row-falta');
+                        btnF.classList.add('selected-f');
+                        divObs.classList.remove('hidden'); // Mostra a coluna Obs
+                        if(info.motivo) select.value = info.motivo;
                     }
                 }
+            });
+        } else {
+            // Limpa tabela se mudou para um dia sem dados
+            document.querySelectorAll('tr[id^="row-"]').forEach(tr => {
+                tr.className = "";
+                tr.querySelectorAll('.btn-check').forEach(b => b.className = 'btn-check');
+                tr.querySelectorAll('div[id^="div-obs-"]').forEach(d => d.classList.add('hidden'));
+                tr.querySelectorAll('select').forEach(s => s.value = "");
             });
         }
     });
 }
 
-// RH e Cadastros
+// ... RH (MANTENHA IGUAL) ...
 const formRH = document.getElementById('form-rh');
 const listaRHBody = document.getElementById('lista-rh-body');
-
 if (formRH) {
     formRH.addEventListener('submit', async (e) => {
         e.preventDefault();
-        const nome = document.getElementById('rh-nome').value;
-        const matricula = document.getElementById('rh-matricula').value;
-        const funcao = document.getElementById('rh-funcao').value;
-        const linha = document.getElementById('rh-linha').value;
-
-        if(!linha) { alert("Selecione uma linha!"); return; }
-        const btnSalvar = formRH.querySelector('button');
-        btnSalvar.textContent = "Salvando...";
-        
         try {
             await addDoc(collection(db, "colaboradores"), {
-                nome: nome.toUpperCase(),
-                matricula: matricula,
-                funcao: funcao,
-                linha: linha,
-                ativo: true,
-                criadoEm: new Date()
+                nome: document.getElementById('rh-nome').value.toUpperCase(),
+                matricula: document.getElementById('rh-matricula').value,
+                funcao: document.getElementById('rh-funcao').value,
+                linha: document.getElementById('rh-linha').value,
+                ativo: true, criadoEm: new Date()
             });
-            alert("Cadastrado!");
-            formRH.reset();
-        } catch(e) { console.error(e); alert("Erro."); }
-        finally { btnSalvar.textContent = "Salvar Colaborador"; }
+            alert("Sucesso!"); formRH.reset();
+        } catch(e) { console.error(e); }
     });
 }
-
 function carregarColaboradoresRH() {
-    onSnapshot(query(collection(db, "colaboradores"), orderBy("nome")), (snapshot) => {
+    onSnapshot(query(collection(db, "colaboradores"), orderBy("nome")), (s) => {
         listaRHBody.innerHTML = "";
-        snapshot.forEach((doc) => {
-            const colab = doc.data();
-            let nomeLinha = colab.linha === 'linha_1' ? "Linha 1" : (colab.linha === 'linha_2' ? "Linha 2" : "Acabamento");
-            const tr = document.createElement('tr');
-            tr.innerHTML = `<td>${colab.matricula}</td><td><strong>${colab.nome}</strong><br><small>${colab.funcao}</small></td><td><span class="badge">${nomeLinha}</span></td><td style="text-align:right"><button class="btn-excluir" onclick="window.deletarColaborador('${doc.id}')">Excluir</button></td>`;
-            listaRHBody.appendChild(tr);
+        s.forEach((d) => {
+            const c = d.data();
+            listaRHBody.innerHTML += `<tr><td>${c.matricula}</td><td>${c.nome}</td><td>${c.linha}</td><td><button class="btn-excluir" onclick="window.deletarColaborador('${d.id}')">X</button></td></tr>`;
         });
     });
 }
-
 window.deletarColaborador = async function(id) {
     if(confirm("Excluir?")) await deleteDoc(doc(db, "colaboradores", id));
 }
