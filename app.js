@@ -1,7 +1,11 @@
 import { auth, db } from './firebase-config.js';
 import { signInWithEmailAndPassword, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
-// ATENÇÃO: Adicionei 'where' nas importações abaixo
-import { collection, addDoc, query, orderBy, onSnapshot, deleteDoc, doc, where } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
+import { collection, addDoc, query, orderBy, onSnapshot, deleteDoc, doc, where, setDoc, getDoc } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
+
+// --- VARIÁVEIS GLOBAIS DE ESTADO ---
+let linhaAtual = 'linha_1'; // Começa na Linha 1
+let unsubscribeColaboradores = null; // Para limpar memória
+let unsubscribeChamadaDia = null;    // Para limpar memória
 
 // --- ELEMENTOS ---
 const loginScreen = document.getElementById('login-screen');
@@ -40,11 +44,20 @@ onAuthStateChanged(auth, (user) => {
         appScreen.classList.remove('hidden');
         
         document.getElementById('user-display-email').textContent = user.email.split('@')[0];
-        document.getElementById('data-chamada').valueAsDate = new Date();
         
-        // Inicia carregando a lista do RH e a Chamada da Linha 1 por padrão
+        // Define data de hoje se estiver vazio
+        const dateInput = document.getElementById('data-chamada');
+        if(!dateInput.value) dateInput.valueAsDate = new Date();
+        
+        // Carrega dados iniciais
         carregarColaboradoresRH();
-        carregarListaChamada('linha_1'); 
+        carregarListaChamada(); // Carrega a linha padrão (linha_1)
+        
+        // Monitora mudança de data para recarregar a chamada
+        dateInput.addEventListener('change', () => {
+            carregarListaChamada(); // Recarrega os status quando muda a data
+        });
+
     } else {
         loginScreen.classList.remove('hidden');
         appScreen.classList.add('hidden');
@@ -77,40 +90,40 @@ navBtns.forEach(btn => {
     });
 });
 
-// --- 3. LÓGICA DA CHAMADA (NOVO!) ---
+// --- 3. LÓGICA DA CHAMADA (MOTOR PRINCIPAL) ---
 const lineBtns = document.querySelectorAll('.line-btn');
 const listaChamadaContainer = document.querySelector('.lista-chamada');
 
-// Troca de Linha (Botões)
+// Troca de Linha
 lineBtns.forEach(btn => {
     btn.addEventListener('click', () => {
-        // Visual
         lineBtns.forEach(b => b.classList.remove('active'));
         btn.classList.add('active');
         
-        // Lógica: Identifica qual linha foi clicada
-        let linhaSelecionada = 'linha_1';
-        if(btn.textContent.includes('Linha 2')) linhaSelecionada = 'linha_2';
-        if(btn.textContent.includes('Acabamento')) linhaSelecionada = 'acabamento';
+        // Define a linha atual baseada no texto do botão
+        if(btn.textContent.includes('Linha 1')) linhaAtual = 'linha_1';
+        else if(btn.textContent.includes('Linha 2')) linhaAtual = 'linha_2';
+        else if(btn.textContent.includes('Acabamento')) linhaAtual = 'acabamento';
         
-        // Carrega os dados
-        carregarListaChamada(linhaSelecionada);
+        carregarListaChamada();
     });
 });
 
-// Função que busca no banco e desenha a lista
-function carregarListaChamada(linhaAlvo) {
+// Constrói a lista de funcionários da linha
+function carregarListaChamada() {
     listaChamadaContainer.innerHTML = '<p style="text-align:center; margin-top:20px;">Carregando equipe...</p>';
 
-    // Consulta: Pega colaboradores da linha X que estão ATIVOS
+    // Se já tinha um listener ativo, desliga ele para não duplicar
+    if (unsubscribeColaboradores) unsubscribeColaboradores();
+
     const q = query(
         collection(db, "colaboradores"), 
-        where("linha", "==", linhaAlvo),
+        where("linha", "==", linhaAtual),
         where("ativo", "==", true),
         orderBy("nome")
     );
 
-    onSnapshot(q, (snapshot) => {
+    unsubscribeColaboradores = onSnapshot(q, (snapshot) => {
         listaChamadaContainer.innerHTML = "";
 
         if (snapshot.empty) {
@@ -122,10 +135,11 @@ function carregarListaChamada(linhaAlvo) {
             const colab = doc.data();
             const id = doc.id;
 
-            // Cria o Card do Funcionário
             const card = document.createElement('div');
-            card.className = 'chamada-card'; // Status padrão neutro
+            card.className = 'chamada-card';
             card.id = `card-${id}`;
+            // Guarda o nome no dataset para facilitar salvamento
+            card.dataset.nome = colab.nome; 
 
             card.innerHTML = `
                 <div class="colab-info">
@@ -143,45 +157,145 @@ function carregarListaChamada(linhaAlvo) {
                 </div>
 
                 <div class="motivo-box hidden" id="motivo-box-${id}">
-                    <select class="motivo-select" id="motivo-${id}">
+                    <select class="motivo-select" id="motivo-${id}" onchange="atualizarMotivo('${id}')">
                         <option value="">Selecione o Motivo...</option>
                         <option value="Injustificada">Falta Injustificada</option>
                         <option value="Atestado">Atestado Médico</option>
                         <option value="Justificada">Justificada (Gestor)</option>
                         <option value="Suspensao">Suspensão</option>
+                        <option value="Folga">Folga / Compensação</option>
                     </select>
                 </div>
             `;
             listaChamadaContainer.appendChild(card);
         });
+
+        // Após desenhar a lista, busca os status do banco para pintar os botões
+        sincronizarStatusChamada();
     });
 }
 
-// Função Global para lidar com os cliques (Presente/Falta)
-window.marcarPresenca = function(id, status) {
+// Escuta o documento do DIA e atualiza as cores na tela
+function sincronizarStatusChamada() {
+    const dataIso = document.getElementById('data-chamada').value; // YYYY-MM-DD
+    if(!dataIso) return;
+
+    // Se já tinha listener do dia, desliga
+    if (unsubscribeChamadaDia) unsubscribeChamadaDia();
+
+    // O documento será: chamadas/2026-01-22
+    const docRef = doc(db, "chamadas", dataIso);
+
+    unsubscribeChamadaDia = onSnapshot(docRef, (docSnap) => {
+        if (docSnap.exists()) {
+            const dadosDia = docSnap.data();
+            const dadosLinha = dadosDia[linhaAtual] || {}; // Pega só os dados da linha atual
+
+            // Percorre todos os cards na tela e atualiza o visual
+            document.querySelectorAll('.chamada-card').forEach(card => {
+                const id = card.id.replace('card-', '');
+                const info = dadosLinha[id]; // Informação salva para este user
+
+                const btnP = card.querySelector('.btn-p');
+                const btnF = card.querySelector('.btn-f');
+                const motivoBox = document.getElementById(`motivo-box-${id}`);
+                const selectMotivo = document.getElementById(`motivo-${id}`);
+
+                // Reset visual
+                card.classList.remove('presente', 'falta');
+                btnP.classList.remove('selected');
+                btnF.classList.remove('selected');
+                motivoBox.classList.add('hidden');
+
+                if (info) {
+                    if (info.status === 'presente') {
+                        card.classList.add('presente');
+                        btnP.classList.add('selected');
+                    } else if (info.status === 'falta') {
+                        card.classList.add('falta');
+                        btnF.classList.add('selected');
+                        motivoBox.classList.remove('hidden');
+                        if (info.motivo) selectMotivo.value = info.motivo;
+                    }
+                }
+            });
+        } else {
+            // Se o dia não existe no banco, limpa tudo visualmente
+            document.querySelectorAll('.chamada-card').forEach(card => {
+                card.classList.remove('presente', 'falta');
+                card.querySelector('.btn-p').classList.remove('selected');
+                card.querySelector('.btn-f').classList.remove('selected');
+                card.querySelector('.motivo-box').classList.add('hidden');
+                card.querySelector('select').value = "";
+            });
+        }
+    });
+}
+
+// --- FUNÇÕES DE AÇÃO (SALVAR NO BANCO) ---
+
+// 1. Clicou em Presente ou Falta
+window.marcarPresenca = async function(id, status) {
+    const dataIso = document.getElementById('data-chamada').value;
     const card = document.getElementById(`card-${id}`);
-    const btnP = card.querySelector('.btn-p');
-    const btnF = card.querySelector('.btn-f');
-    const motivoBox = document.getElementById(`motivo-box-${id}`);
+    const nomeColab = card.dataset.nome;
 
-    // Limpa estados anteriores
-    card.classList.remove('presente', 'falta');
-    btnP.classList.remove('selected');
-    btnF.classList.remove('selected');
-    motivoBox.classList.add('hidden');
+    if (!dataIso) { alert("Selecione uma data!"); return; }
 
-    if (status === 'presente') {
-        card.classList.add('presente');
-        btnP.classList.add('selected');
-        // Check verde
-    } else {
-        card.classList.add('falta');
-        btnF.classList.add('selected');
-        motivoBox.classList.remove('hidden'); // Abre o select
-    }
+    // Estrutura para salvar: linha_X -> id_colab -> { status, nome, timestamp }
+    const updateData = {};
     
-    // AQUI ENTRARÁ O CÓDIGO DE SALVAR NO BANCO FUTURAMENTE
-    console.log(`Colaborador ${id} está ${status}`);
+    // Caminho exato dentro do documento: "linha_1.ID123"
+    const campo = `${linhaAtual}.${id}`;
+
+    updateData[campo] = {
+        status: status,
+        nome: nomeColab, // Salvar o nome facilita relatórios futuros sem cruzar tabelas
+        atualizadoEm: new Date().toISOString()
+    };
+
+    // Se for falta, já prepara o motivo (se já tiver algo selecionado, mantém, senão vazio)
+    if (status === 'falta') {
+        const motivoAtual = document.getElementById(`motivo-${id}`).value;
+        updateData[campo].motivo = motivoAtual;
+    } else {
+        // Se for presente, apaga o motivo
+        updateData[campo].motivo = ""; 
+    }
+
+    try {
+        // setDoc com merge: true cria o dia se não existir, ou atualiza se existir
+        await setDoc(doc(db, "chamadas", dataIso), updateData, { merge: true });
+        // O feedback visual virá automaticamente pelo onSnapshot do sincronizarStatusChamada()
+    } catch (error) {
+        console.error("Erro ao salvar presença:", error);
+        alert("Erro ao salvar. Verifique conexão.");
+    }
+};
+
+// 2. Mudou o Select de Motivo
+window.atualizarMotivo = async function(id) {
+    const dataIso = document.getElementById('data-chamada').value;
+    const novoMotivo = document.getElementById(`motivo-${id}`).value;
+    const card = document.getElementById(`card-${id}`);
+    const nomeColab = card.dataset.nome;
+
+    const updateData = {};
+    const campo = `${linhaAtual}.${id}`;
+
+    // Atualiza apenas o motivo, mantendo status falta
+    updateData[campo] = {
+        status: 'falta',
+        nome: nomeColab,
+        motivo: novoMotivo,
+        atualizadoEm: new Date().toISOString()
+    };
+
+    try {
+        await setDoc(doc(db, "chamadas", dataIso), updateData, { merge: true });
+    } catch (error) {
+        console.error("Erro ao salvar motivo:", error);
+    }
 };
 
 
