@@ -2,8 +2,7 @@ import React, { useState } from 'react';
 import { Search, Box, Layers, Factory, Ruler, AlertCircle, Loader2, ChevronRight } from 'lucide-react';
 
 // === A SUA URL DO POWER AUTOMATE ===
-const POWER_AUTOMATE_URL = "https://default63123b3750ce444c80fafe99d1bf9f46environment.api.powerplatform.com:443/powerautomate/automations/direct/workflows/ab37f4a7d0a94a388fab2161f970e7fc/triggers/manual/paths/invoke?api-version=1&sp=%2Ftriggers%2Fmanual%2Frun&sv=1.0&sig=wp2-vlplwP9LufynRp1I8GyIc1EkBmEghe2nKsh10G8";
-
+const POWER_AUTOMATE_URL = "https://default63123b3750ce444c80fafe99d1bf9f.46.environment.api.powerplatform.com:443/powerautomate/automations/direct/workflows/ab37f4a7d0a94a388fab2161f970e7fc/triggers/manual/paths/invoke?api-version=1&sp=%2Ftriggers%2Fmanual%2Frun&sv=1.0&sig=wp2-vlplwP9LufynRp1I8GyIc1EkBmEghe2nKsh10G8";
 export default function App() {
   const [activeTab, setActiveTab] = useState('PROJETO'); 
   const [searchValue, setSearchValue] = useState('');
